@@ -1,16 +1,16 @@
 #!/bin/bash
 
 # File to store repositories and last checked timestamps
-CONFIG_DIR="$(pwd)"
+CONFIG_DIR="$(pwd)/repo_config"
 REPO_FILE="$CONFIG_DIR/repositories.txt"
 TIMESTAMP_FILE="$CONFIG_DIR/timestamps.txt"
 
 # Notification system integration
-NOTIFIER_SCRIPT="$CONFIG_DIR/github-issue-notifier.sh"
+NOTIFIER_SCRIPT="$(pwd)/github-issue-notifier.sh"
 
 
 # Create config directory if it doesn't exist
-#mkdir -p "$CONFIG_DIR"
+mkdir -p "$CONFIG_DIR"
 
 # Initialize files if they don't exist
 touch "$REPO_FILE" "$TIMESTAMP_FILE"
@@ -29,7 +29,7 @@ show_menu() {
     echo "2. Add repository"
     echo "3. Remove repository"
     echo "4. List monitored repositories"
-    echo "5. Test notifications"
+    echo "5. Notifications Menu"
     echo "6. Exit"
     echo -n "Select option: "
 }
@@ -227,7 +227,7 @@ check_new_issues() {
 
     # Process all notifications at once
     if [ "$notification_pending" = true ] && check_notifier; then
-        "$NOTIFIER_SCRIPT" process
+        "$NOTIFIER_SCRIPT" --process
     fi
     
     if [ "$found_new" = false ]; then
@@ -260,7 +260,7 @@ send_notification() {
     local issues="$@"
     
     if check_notifier; then
-        "$NOTIFIER_SCRIPT" add "$repo" "$count" "$issues"
+        "$NOTIFIER_SCRIPT" --add "$repo" "$count" "$issues"
     fi
 }
 
@@ -286,7 +286,7 @@ while true; do
             ;;
         5)
             if check_notifier; then
-                "$NOTIFIER_SCRIPT" test
+                "$NOTIFIER_SCRIPT" 
             fi
             ;;
         6)
