@@ -5,6 +5,9 @@ CONFIG_DIR="$(pwd)"
 REPO_FILE="$CONFIG_DIR/repositories.txt"
 TIMESTAMP_FILE="$CONFIG_DIR/timestamps.txt"
 
+# Notification system integration
+NOTIFIER_SCRIPT="$CONFIG_DIR/github-issue-notifier.sh"
+
 
 # Create config directory if it doesn't exist
 #mkdir -p "$CONFIG_DIR"
@@ -26,7 +29,8 @@ show_menu() {
     echo "2. Add repository"
     echo "3. Remove repository"
     echo "4. List monitored repositories"
-    echo "5. Exit"
+    echo "5. Test notifications"
+    echo "6. Exit"
     echo -n "Select option: "
 }
 
@@ -137,6 +141,7 @@ check_new_issues() {
     echo -e "\n${BLUE}Checking for new issues...${NC}\n"
     
     local found_new=false
+    local notification_pending=false
     
     while IFS= read -r repo; do
         [ -z "$repo" ] && continue
@@ -193,11 +198,19 @@ check_new_issues() {
         
         if [ "$issue_count" -gt 0 ]; then
             found_new=true
+            notification_pending=true
             echo -e "${GREEN}  Found $issue_count new issue(s):${NC}"
+
+            # Extract issue details for display and notification
+            issue_details=$(echo "$response" | jq -r '.[] | 
+                select(.pull_request == null) | 
+                "[#\(.number)] \(.title)"')
             
             echo "$response" | jq -r '.[] | 
                 select(.pull_request == null) | 
                 "    [#\(.number)] \(.title)\n      URL: \(.html_url)\n      Created: \(.created_at)\n"'
+
+            send_notification "$repo" "$issue_count" "$issue_details"
         else
             echo "  No new issues"
         fi
@@ -211,11 +224,47 @@ check_new_issues() {
         sleep 1
         
     done < "$REPO_FILE"
+
+    # Process all notifications at once
+    if [ "$notification_pending" = true ] && check_notifier; then
+        "$NOTIFIER_SCRIPT" process
+    fi
     
     if [ "$found_new" = false ]; then
         echo -e "${BLUE}No new issues found in any repository${NC}"
     fi
 }
+
+
+
+# Function to check if notifier exists
+check_notifier() {
+    if [ ! -f "$NOTIFIER_SCRIPT" ]; then
+        echo -e "${YELLOW}Warning: Notification script not found at $NOTIFIER_SCRIPT${NC}"
+        echo -e "${YELLOW}Notifications will be disabled${NC}"
+        return 1
+    fi
+    
+    if [ ! -x "$NOTIFIER_SCRIPT" ]; then
+        chmod +x "$NOTIFIER_SCRIPT"
+    fi
+    
+    return 0
+}
+
+# Function to send notification
+send_notification() {
+    local repo=$1
+    local count=$2
+    shift 2
+    local issues="$@"
+    
+    if check_notifier; then
+        "$NOTIFIER_SCRIPT" add "$repo" "$count" "$issues"
+    fi
+}
+
+
 
 # Main loop
 while true; do
@@ -236,6 +285,11 @@ while true; do
             list_repositories
             ;;
         5)
+            if check_notifier; then
+                "$NOTIFIER_SCRIPT" test
+            fi
+            ;;
+        6)
             echo -e "\n${GREEN}Goodbye!${NC}"
             exit 0
             ;;
